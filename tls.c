@@ -13,6 +13,17 @@
  *    E.g., a list of thread IDs and their related TLS structs, or a hash table.
  */
 
+static struct tls{
+  pthread_t tid;   //which thread
+  unsigned int size;
+  struct page *addr;
+};
+
+struct page{
+  unsigned int num_ref;
+  unsigned int *offset;
+};
+
 /*
  * Now that data structures are defined, here's a good place to declare any
  * global variables.
@@ -29,7 +40,9 @@
 
 int tls_create(unsigned int size)
 {
-	return 0;
+  
+  
+  return 0;
 }
 
 int tls_destroy()

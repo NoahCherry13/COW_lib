@@ -1,4 +1,9 @@
 #include "tls.h"
+#include <stdio.h>
+#include <stderr.h>
+#include <signal.h>
+#include <sys/mman.h>
+#include <unistd.h>  //for getpagesize()
 
 /*
  * This is a good place to define any data structures you will use in this file.
@@ -13,22 +18,29 @@
  *    E.g., a list of thread IDs and their related TLS structs, or a hash table.
  */
 
-static struct tls{
-  pthread_t tid;   //which thread
-  unsigned int size;
-  struct page *addr;
+struct tls{
+  pthread_t tid;      // which thread
+  unsigned int size;  // size of storage
+  struct page *addr;  // storage location
 };
 
 struct page{
-  unsigned int num_ref;
-  unsigned int *offset;
+  unsigned int num_ref;  // number of references to a page
+  unsigned int *head;    // start of the page
+};
+
+struct mapping{
+  struct tls storage;   // tls struct for the matching thread
+  pthread_t thread;     // id of the thread tls belongs to
+  struct mapping *next; // next pointer for linked list
+  struct mapping *prev; // previous pointer for linked list;
 };
 
 /*
  * Now that data structures are defined, here's a good place to declare any
  * global variables.
  */
-
+static char init = 0;
 /*
  * With global data declared, this is a good point to start defining your
  * static helper functions.
@@ -40,8 +52,23 @@ struct page{
 
 int tls_create(unsigned int size)
 {
-  
-  
+  if (!init){
+    //initialize sig handler
+    struct sigaction handler;
+    sigemptyset(&handler.sa_mask);
+    handler.sa_flags = SA_SIGINFO;
+    handler.sa_handler = tls_fault;
+    sigaction(SIGSEGV, &handler, NULL);
+
+    //create linked list head
+    struct mapping *head = malloc(sizeof(mapping));
+    head->prev = NULL;
+    head->next = NULL;
+    head->tid = NULL;
+    head->tls = NULL
+  }
+
+  //check if thread is already mapped to 
   return 0;
 }
 

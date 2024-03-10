@@ -1,10 +1,10 @@
 #include "tls.h"
 #include <stdio.h>
-#include <stderr.h>
+#include <stdlib.h>
 #include <signal.h>
 #include <sys/mman.h>
 #include <unistd.h>  //for getpagesize()
-
+#include <stddef.h>
 /*
  * This is a good place to define any data structures you will use in this file.
  * For example:
@@ -30,8 +30,8 @@ struct page{
 };
 
 struct mapping{
-  struct tls storage;   // tls struct for the matching thread
-  pthread_t thread;     // id of the thread tls belongs to
+  struct tls *tls;   // tls struct for the matching thread
+  pthread_t tid;     // id of the thread tls belongs to
   struct mapping *next; // next pointer for linked list
   struct mapping *prev; // previous pointer for linked list;
 };
@@ -41,10 +41,15 @@ struct mapping{
  * global variables.
  */
 static char init = 0;
+static struct mapping *head;
 /*
  * With global data declared, this is a good point to start defining your
  * static helper functions.
  */
+
+void tls_fault(int sig){
+
+}
 
 /*
  * Lastly, here is a good place to add your externally-callable functions.
@@ -53,6 +58,7 @@ static char init = 0;
 int tls_create(unsigned int size)
 {
   if (!init){
+    head = malloc(sizeof(struct mapping));
     //initialize sig handler
     struct sigaction handler;
     sigemptyset(&handler.sa_mask);
@@ -61,14 +67,28 @@ int tls_create(unsigned int size)
     sigaction(SIGSEGV, &handler, NULL);
 
     //create linked list head
-    struct mapping *head = malloc(sizeof(mapping));
+    struct mapping *head = malloc(sizeof(struct mapping));
     head->prev = NULL;
     head->next = NULL;
-    head->tid = NULL;
-    head->tls = NULL
   }
 
-  //check if thread is already mapped to 
+  //check if thread is already mapped to tls 
+  pthread_t tid = pthread_self();
+  struct mapping *map_ind = head;
+
+  while(map_ind->next != NULL){
+    map_ind = map_ind->next;
+    if (map_ind->tid == tid && map_ind->tls->size){
+      printf("tls already assigned to thread\n{tid: %ld}\n{size: %d}", tid, map_ind->tls->size);
+      return -1;
+    }
+  }
+
+  //thread is not mapped to tls
+  struct mapping *new_map = malloc(sizeof(struct mapping));
+  new_map->tid = tid;
+  new_map->tls = malloc(sizeof(struct tls));
+  new_map->tls->size = size;
   return 0;
 }
 

@@ -19,9 +19,10 @@
  */
 
 struct tls{
-  pthread_t tid;      // which thread
-  unsigned int size;  // size of storage
-  struct page *addr;  // storage location
+  pthread_t tid;          // which thread
+  unsigned int size;      // size of storage
+  unsigned int num_pages; // number pages allocated
+  struct page *addr;      // storage location
 };
 
 struct page{
@@ -30,10 +31,10 @@ struct page{
 };
 
 struct mapping{
-  struct tls *tls;   // tls struct for the matching thread
-  pthread_t tid;     // id of the thread tls belongs to
-  struct mapping *next; // next pointer for linked list
-  struct mapping *prev; // previous pointer for linked list;
+  struct tls *tls;       // tls struct for the matching thread
+  pthread_t tid;         // id of the thread tls belongs to
+  struct mapping *next;  // next pointer for linked list
+  struct mapping *prev;  // previous pointer for linked list;
 };
 
 /*
@@ -46,6 +47,12 @@ static struct mapping *head;
  * With global data declared, this is a good point to start defining your
  * static helper functions.
  */
+
+unsigned int byte_to_page(int bytes){
+  
+  unsigned int pages = (bytes + getpagesize()/2)/getpagesize();
+  return pages;
+}
 
 void tls_fault(int sig){
 
@@ -89,6 +96,7 @@ int tls_create(unsigned int size)
   new_map->tid = tid;
   new_map->tls = malloc(sizeof(struct tls));
   new_map->tls->size = size;
+  new_map->tls->num_pages = byte_to_page(size);
   return 0;
 }
 

@@ -101,7 +101,7 @@ int tls_create(unsigned int size)
   new_map->tls = malloc(sizeof(struct tls));
   new_map->tls->size = size;
   new_map->tls->num_pages = byte_to_page(size);
-
+  
 
   int num_pages = byte_to_page(size);
   if (size > 0){
@@ -124,7 +124,8 @@ int tls_create(unsigned int size)
 
 int tls_destroy()
 {
-	return 0;
+  
+  return 0;
 }
 
 int tls_read(unsigned int offset, unsigned int length, char *buffer)

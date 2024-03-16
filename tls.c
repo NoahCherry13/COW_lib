@@ -102,10 +102,22 @@ int tls_create(unsigned int size)
   new_map->tls->size = size;
   new_map->tls->num_pages = byte_to_page(size);
 
-  if (size > 0){
-    
-  }
 
+  int num_pages = byte_to_page(size);
+  if (size > 0){
+    //create head of list
+    new_map->tls->addr = (struct page *) malloc(num_pages);
+    struct page *ref_page = new_map->tls->addr;
+    ref_page->head = mmap(0, getpagesize(), PROT_NONE, MAP_ANON | MAP_PRIVATE, 0, 0);
+    //populate rest of list as needed;
+    for (int i = 1; i < num_pages; i++){
+      ref_page->next_page = (struct page *) malloc(num_pages);
+      ref_page = ref_page->next_page;
+      ref_page->head = mmap(0, getpagesize(), PROT_NONE, MAP_ANON | MAP_PRIVATE, 0, 0);
+      //****************ADD CASE FOR WHEN MMAP FAILS****************//
+    }
+  }
+  
 
   return 0;
 }

@@ -28,6 +28,8 @@ struct tls{
 struct page{
   unsigned int num_ref;  // number of references to a page
   unsigned int *head;    // start of the page
+  struct page *next_page;
+  struct page *prev_page;
 };
 
 struct mapping{
@@ -92,11 +94,19 @@ int tls_create(unsigned int size)
   }
 
   //thread is not mapped to tls
+
+  //create new mapping and initialize values
   struct mapping *new_map = malloc(sizeof(struct mapping));
   new_map->tid = tid;
   new_map->tls = malloc(sizeof(struct tls));
   new_map->tls->size = size;
   new_map->tls->num_pages = byte_to_page(size);
+
+  if (size > 0){
+    
+  }
+
+
   return 0;
 }
 

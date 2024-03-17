@@ -130,7 +130,25 @@ int tls_destroy()
 
 int tls_read(unsigned int offset, unsigned int length, char *buffer)
 {
-	return 0;
+  int current_thread = pthread_self();
+  struct mapping ind = head;
+  while (ind->next != NULL){
+    if (ind->tid == current_thread){
+      break;
+    }
+    ind = ind->next;
+  }
+  if (ind->tid != current_thread){
+    printf("No TLS Entry for Current Thread\n");
+    return -1;
+  }
+
+  if (offset + length > ind->tls->size){
+    printf("Buffer OOB for TLS");
+    return -1;
+  }
+
+  return 0;
 }
 
 int tls_write(unsigned int offset, unsigned int length, const char *buffer)

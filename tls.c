@@ -59,7 +59,7 @@ unsigned int byte_to_page(int bytes){
 }
 
 void tls_fault(int sig){
-
+  
 }
 
 /*
@@ -180,6 +180,7 @@ int tls_read(unsigned int offset, unsigned int length, char *buffer)
     
     if(is_first_page && offset + length > ps){
       // in first page and need to read over page boundary
+      is_first_page = !is_first_page;
       memcpy(buffer + bytes_read, page_ind->head + offset, ps - (offset + length));
       bytes_read += ps - (offset + length);
     }else if(length - bytes_read > ps){
@@ -244,24 +245,25 @@ int tls_write(unsigned int offset, unsigned int length, const char *buffer)
     }
     
     //do stuff here
-    if(map_ind->tls->num_ref > 1){
-      // tls is already referenced
-      
-      void *temp = mmap(0, ps, PROT_READ | PROT_WRITE, MAR_ANON | MAP_PRIVATE, 0, 0);
-      map_ind->tls->num_ref = 1;
-      memcpy(
+    if(page_ind->num_ref > 1){
+      // tls is already referenced by another thread      
+      void *temp_page = mmap(0, ps, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, 0, 0);
+      page_ind->num_ref = 1;
+      memcpy(temp_page, page_ind->head, ps);
+      page_ind = temp_page;
     }
+
+    
     if(is_first_page && offset + length > ps){
       // in first page and need to read over page boundary
-      memcpy(buffer + bytes_read, page_ind->head + offset, ps - (offset + length));
-      bytes_read += ps - (offset + length);
-    }else if(length - bytes_read > ps){
+      is_first_page = !is_first_page;
+      memcpy(page_ind->head + page_offset, buffer + bytes_written, ps-offset);
+    }else if(length - bytes_written > ps){
       // not in first page and need to read full page
-      memcpy(buffer + bytes_read, page_ind->head + offset, ps);
-      bytes_read += ps;
+      
     }else{
       // in final page -- read rest of length from current page
-      memcpy(buffer + bytes_read, page_ind->head + offset, length - bytes_read);
+      
     }
     if (mprotect((void*) page_ind->head, ps, PROT_NONE)) {
       printf("Unable to Reprotect Page\n");

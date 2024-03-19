@@ -1,6 +1,7 @@
 #include "tls.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <signal.h>
 #include <sys/mman.h>
 #include <unistd.h>  //for getpagesize()
@@ -133,13 +134,14 @@ int tls_destroy()
 
 int tls_read(unsigned int offset, unsigned int length, char *buffer)
 {
-  struct page *page_ind = map_ind->tls->addr;
   struct mapping *map_ind = head;
+  struct page *page_ind = map_ind->tls->addr;
   int pages_loaded = (int)((offset + length)/ps)+(offset&&1); //number of pages to load
   int current_thread = pthread_self();
   int page_offset = offset % ps;
-  int start_page = offset / ps;
-  
+  //int start_page = offset / ps;
+  int bytes_read = 0;
+  int is_first_page = 1;
   //find mapping for current thread
   while (map_ind->next != NULL){
     if (map_ind->tid == current_thread){
@@ -176,8 +178,21 @@ int tls_read(unsigned int offset, unsigned int length, char *buffer)
     
     //do stuff here
     
-    if(){
-      
+    if(is_first_page && offset + length > ps){
+      // in first page and need to read over page boundary
+      memcpy(buffer + bytes_read, page_ind->head + offset, ps - (offset + length));
+      bytes_read += ps - (offset + length);
+    }else if(length - bytes_read > ps){
+      // not in first page and need to read full page
+      memcpy(buffer + bytes_read, page_ind->head + offset, ps);
+      bytes_read += ps;
+    }else{
+      // in final page -- read rest of length from current page
+      memcpy(buffer + bytes_read, page_ind->head + offset, length - bytes_read);
+    }
+    if (mprotect((void*) page_ind->head, ps, PROT_NONE)) {
+      printf("Unable to Reprotect Page\n");
+      exit(0);
     }
   }
     
@@ -186,10 +201,11 @@ int tls_read(unsigned int offset, unsigned int length, char *buffer)
 
 int tls_write(unsigned int offset, unsigned int length, const char *buffer)
 {
-	return 0;
+
+  return 0;
 }
 
 int tls_clone(pthread_t tid)
 {
-	return 0;
+  return 0;
 }

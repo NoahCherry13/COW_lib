@@ -136,7 +136,9 @@ int tls_read(unsigned int offset, unsigned int length, char *buffer)
   struct mapping ind = head;
   int start_page = offset / ps;
   int page_offset = offset % ps;
-  int pages_loaded = offset 
+  int pages_loaded = (int)((offset + length)/ps)+(offset&&1); //number of pages to load
+  struct mapping first_page = head;
+  
   //find mapping for current thread
   while (ind->next != NULL){
     if (ind->tid == current_thread){
@@ -154,7 +156,11 @@ int tls_read(unsigned int offset, unsigned int length, char *buffer)
     return -1;
   }
 
-  
+  for(int i = 0; i < page_offset; i++){
+    first_page = start_page->next;
+  }
+  //memcpy -> dest, src, size
+  //loop to unprotect one page at a time to read from and read length in
   
   return 0;
 }

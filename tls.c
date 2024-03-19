@@ -45,7 +45,7 @@ struct mapping{
  */
 static char init = 0;
 static struct mapping *head;
-unsigned int ps = getpagesize(); //page size
+unsigned int ps; //page size
 /*
  * With global data declared, this is a good point to start defining your
  * static helper functions.
@@ -67,6 +67,7 @@ void tls_fault(int sig){
 
 int tls_create(unsigned int size)
 {
+  ps = getpagesize();
   if (!init){
     head = malloc(sizeof(struct mapping));
     //initialize sig handler
@@ -132,36 +133,54 @@ int tls_destroy()
 
 int tls_read(unsigned int offset, unsigned int length, char *buffer)
 {
-  int current_thread = pthread_self();
-  struct mapping *ind = head;
-  int start_page = offset / ps;
-  int page_offset = offset % ps;
+  struct page *page_ind = map_ind->tls->addr;
+  struct mapping *map_ind = head;
   int pages_loaded = (int)((offset + length)/ps)+(offset&&1); //number of pages to load
-  struct page *first_page = ind->tls->address;
+  int current_thread = pthread_self();
+  int page_offset = offset % ps;
+  int start_page = offset / ps;
   
   //find mapping for current thread
-  while (ind->next != NULL){
-    if (ind->tid == current_thread){
+  while (map_ind->next != NULL){
+    if (map_ind->tid == current_thread){
       break;
     }
-    ind = ind->next;
+    map_ind = map_ind->next;
   }
-  if (ind->tid != current_thread){
+
+  //--------------Handle Error Cases-------------------//
+  if (map_ind->tid != current_thread){
     printf("No TLS Entry for Current Thread\n");
     return -1;
   }
 
-  if (offset + length > ind->tls->size){
+  if (offset + length > map_ind->tls->size){
     printf("Buffer OOB for TLS");
     return -1;
   }
   
-  //memcpy -> dest, src, size
-  //loop to unprotect one page at a time to read from and read length in
-  for(int i = 0; i < page_offset; i++){
-    first_page->next_page;
+  //----------------loop to find start page ind---------//
+  for(int i = 1; i < page_offset; i++){
+    page_ind = page_ind->next_page;
   }
-  
+
+  //--------------Mem Unprotect and read-----------------//
+  // memcpy -> dest, src, size
+  // loop to unprotect one page at a time to read from and read length in
+  for(int i = 0; i < pages_loaded; i++){
+    // try to unprotect current page
+    if(mprotect((void *)page_ind->head, ps, PROT_READ | PROT_WRITE)){
+      printf("Unable to Unprotect Page\n");
+      exit(0);
+    }
+    
+    //do stuff here
+    
+    if(){
+      
+    }
+  }
+    
   return 0;
 }
 

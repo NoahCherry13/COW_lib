@@ -244,10 +244,12 @@ int tls_write(unsigned int offset, unsigned int length, const char *buffer)
     }
     
     //do stuff here
-    if(map_ind->tls->ref_count){
+    if(map_ind->tls->num_ref > 1){
       // tls is already referenced
-      map_ind->tls = (struct page *) malloc(sizeof(struct page));
       
+      void *temp = mmap(0, ps, PROT_READ | PROT_WRITE, MAR_ANON | MAP_PRIVATE, 0, 0);
+      map_ind->tls->num_ref = 1;
+      memcpy(
     }
     if(is_first_page && offset + length > ps){
       // in first page and need to read over page boundary
@@ -266,7 +268,7 @@ int tls_write(unsigned int offset, unsigned int length, const char *buffer)
       exit(0);
     }
   }
-      
+  
   return 0;
 }
 

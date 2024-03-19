@@ -45,6 +45,7 @@ struct mapping{
  */
 static char init = 0;
 static struct mapping *head;
+unsigned int ps = getpagesize(); //page size
 /*
  * With global data declared, this is a good point to start defining your
  * static helper functions.
@@ -52,7 +53,7 @@ static struct mapping *head;
 
 unsigned int byte_to_page(int bytes){
   
-  unsigned int pages = (bytes + getpagesize()/2)/getpagesize();
+  unsigned int pages = (bytes + ps/2)/ps;
   return pages;
 }
 
@@ -108,12 +109,12 @@ int tls_create(unsigned int size)
     //create head of list
     new_map->tls->addr = (struct page *) malloc(num_pages);
     struct page *ref_page = new_map->tls->addr;
-    ref_page->head = mmap(0, getpagesize(), PROT_NONE, MAP_ANON | MAP_PRIVATE, 0, 0);
+    ref_page->head = mmap(0, ps, PROT_NONE, MAP_ANON | MAP_PRIVATE, 0, 0);
     //populate rest of list as needed;
     for (int i = 1; i < num_pages; i++){
       ref_page->next_page = (struct page *) malloc(num_pages);
       ref_page = ref_page->next_page;
-      ref_page->head = mmap(0, getpagesize(), PROT_NONE, MAP_ANON | MAP_PRIVATE, 0, 0);
+      ref_page->head = mmap(0, ps, PROT_NONE, MAP_ANON | MAP_PRIVATE, 0, 0);
       //****************ADD CASE FOR WHEN MMAP FAILS****************//
     }
   }
@@ -132,6 +133,9 @@ int tls_read(unsigned int offset, unsigned int length, char *buffer)
 {
   int current_thread = pthread_self();
   struct mapping ind = head;
+  int start_page = offset/ps;
+  
+  //find mapping for current thread
   while (ind->next != NULL){
     if (ind->tid == current_thread){
       break;
@@ -148,6 +152,8 @@ int tls_read(unsigned int offset, unsigned int length, char *buffer)
     return -1;
   }
 
+  
+  
   return 0;
 }
 

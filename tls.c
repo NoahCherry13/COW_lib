@@ -201,7 +201,68 @@ int tls_read(unsigned int offset, unsigned int length, char *buffer)
 
 int tls_write(unsigned int offset, unsigned int length, const char *buffer)
 {
-
+  struct mapping *map_ind = head;
+  struct page *page_ind = map_ind->tls->addr;
+  int pages_loaded = (int)((offset + length)/ps)+(offset&&1); //number of pages to load
+  int current_thread = pthread_self();
+  int page_offset = offset % ps;
+  //int start_page = offset / ps;
+  int bytes_written = 0;
+  int is_first_page = 1;
+  //find mapping for current thread
+  while (map_ind->next != NULL){
+    if (map_ind->tid == current_thread){
+      break;
+    }
+    map_ind = map_ind->next;
+  }
+  
+  //--------------Handle Error Cases-------------------//
+  if (map_ind->tid != current_thread){
+    printf("No TLS Entry for Current Thread\n");
+    return -1;
+  }
+  
+  if (offset + length > map_ind->tls->size){
+    printf("Buffer OOB for TLS");
+    return -1;
+  }
+  
+  //----------------loop to find start page ind---------//
+  for(int i = 1; i < page_offset; i++){
+    page_ind = page_ind->next_page;
+  }
+  
+  //--------------Mem Unprotect and read-----------------//
+  // memcpy -> dest, src, size
+  // loop to unprotect one page at a time to read from and read length in
+  for(int i = 0; i < pages_loaded; i++){
+    // try to unprotect current page
+    if(mprotect((void *)page_ind->head, ps, PROT_READ | PROT_WRITE)){
+      printf("Unable to Unprotect Page\n");
+      exit(0);
+    }
+    
+    //do stuff here
+    
+    if(is_first_page && offset + length > ps){
+      // in first page and need to read over page boundary
+      memcpy(buffer + bytes_read, page_ind->head + offset, ps - (offset + length));
+      bytes_read += ps - (offset + length);
+    }else if(length - bytes_read > ps){
+      // not in first page and need to read full page
+      memcpy(buffer + bytes_read, page_ind->head + offset, ps);
+      bytes_read += ps;
+    }else{
+      // in final page -- read rest of length from current page
+      memcpy(buffer + bytes_read, page_ind->head + offset, length - bytes_read);
+    }
+    if (mprotect((void*) page_ind->head, ps, PROT_NONE)) {
+      printf("Unable to Reprotect Page\n");
+      exit(0);
+    }
+  }
+      
   return 0;
 }
 

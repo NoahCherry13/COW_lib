@@ -133,11 +133,11 @@ int tls_destroy()
 int tls_read(unsigned int offset, unsigned int length, char *buffer)
 {
   int current_thread = pthread_self();
-  struct mapping ind = head;
+  struct mapping *ind = head;
   int start_page = offset / ps;
   int page_offset = offset % ps;
   int pages_loaded = (int)((offset + length)/ps)+(offset&&1); //number of pages to load
-  struct mapping first_page = head;
+  struct page *first_page = ind->tls->address;
   
   //find mapping for current thread
   while (ind->next != NULL){
@@ -155,12 +155,12 @@ int tls_read(unsigned int offset, unsigned int length, char *buffer)
     printf("Buffer OOB for TLS");
     return -1;
   }
-
-  for(int i = 0; i < page_offset; i++){
-    first_page = start_page->next;
-  }
+  
   //memcpy -> dest, src, size
   //loop to unprotect one page at a time to read from and read length in
+  for(int i = 0; i < page_offset; i++){
+    first_page->next_page;
+  }
   
   return 0;
 }

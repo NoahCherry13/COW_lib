@@ -118,6 +118,7 @@ int tls_create(unsigned int size)
       //****************ADD CASE FOR WHEN MMAP FAILS****************//
     }
   }
+
   
 
   return 0;
@@ -133,8 +134,9 @@ int tls_read(unsigned int offset, unsigned int length, char *buffer)
 {
   int current_thread = pthread_self();
   struct mapping ind = head;
-  int start_page = offset/ps;
-  
+  int start_page = offset / ps;
+  int page_offset = offset % ps;
+  int pages_loaded = offset 
   //find mapping for current thread
   while (ind->next != NULL){
     if (ind->tid == current_thread){

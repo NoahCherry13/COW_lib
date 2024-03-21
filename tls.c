@@ -128,6 +128,7 @@ int tls_create(unsigned int size)
 
 int tls_destroy()
 {
+
   
   return 0;
 }
@@ -303,6 +304,18 @@ int tls_clone(pthread_t tid)
   
   map_ind->next = (struct mapping *)malloc(sizeof(struct mapping));
   map_ind = map_ind->next;
-  map_ind->tid = tid;
+  map_ind->tid = pthread_self();
+  map_ind->tls = (struct tls *)malloc(sizeof(struct tls));
+  map_ind->tls->num_pages = tid_thread->tls->num_pages;
+  map_ind->tls->addr = tid_thread->tls->addr;
+  map_ind->tls->size = tid_thread->tls->size;
+
+  //increment ref count for all copied pages
+  struct page *page_ind = tid_thread->tls->addr;
+  for(int i = 0; i < tid_thread->tls->num_pages; i++){
+    page_ind->num_ref++;
+    page_ind = page_ind->next_page;
+  }
+  
   return 0;
 }

@@ -301,5 +301,8 @@ int tls_clone(pthread_t tid)
     return -1;
   }
   
+  map_ind->next = (struct mapping *)malloc(sizeof(struct mapping));
+  map_ind = map_ind->next;
+  map_ind->tid = tid;
   return 0;
 }

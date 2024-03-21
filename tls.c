@@ -260,10 +260,10 @@ int tls_write(unsigned int offset, unsigned int length, const char *buffer)
       memcpy(page_ind->head + page_offset, buffer + bytes_written, ps-offset);
     }else if(length - bytes_written > ps){
       // not in first page and need to read full page
-      
+      memcpy(page_ind->head, buffer + bytes_written, ps);
     }else{
       // in final page -- read rest of length from current page
-      
+      memcpy(page_ind->head, buffer + bytes_written, length-bytes_written);
     }
     if (mprotect((void*) page_ind->head, ps, PROT_NONE)) {
       printf("Unable to Reprotect Page\n");
@@ -276,5 +276,30 @@ int tls_write(unsigned int offset, unsigned int length, const char *buffer)
 
 int tls_clone(pthread_t tid)
 {
+  int current_thread = pthread_self();
+  struct mapping *map_ind = head;
+  struct mapping *tid_thread = head;
+  //-----------Find Current Thread---------------------//
+  while (map_ind->next != NULL){
+    if (map_ind->tid == current_thread){
+      printf("LSA Exists for Current Thread\n");
+      return -1;
+    }
+    map_ind = map_ind->next;
+  }
+  //----------Find Thread Specified by TID-------------//
+  while (tid_thread->next != NULL){
+    if (tid_thread->tid == tid){
+      break;
+    }
+    tid_thread = tid_thread->next;
+  }
+  
+  //--------------Handle Error Cases-------------------//
+  if (tid_thread->tid != tid){
+    printf("No LSA for Specified Thread\n");
+    return -1;
+  }
+  
   return 0;
 }

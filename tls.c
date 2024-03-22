@@ -201,51 +201,38 @@ int tls_destroy()
   
   return 0;
 }
-/*
+
 int tls_read(unsigned int offset, unsigned int length, char *buffer)
 {
-  struct mapping *map_ind = head;
-  struct page *page_ind;
+  
   int pages_loaded = (int)((offset + length)/ps)+(offset&&1); //number of pages to load
-  int current_thread = pthread_self();
   int page_offset = offset % ps;
   //int start_page = offset / ps;
   int bytes_read = 0;
   int is_first_page = 1;
+
   //find mapping for current thread
-
-  if(head == NULL) return -1;
-
-  while (map_ind->next != NULL){
-    if (map_ind->tid == current_thread){
-      break;
-    }
-    map_ind = map_ind->next;
-  }
+  pthread_t tid = pthread_self();
+  int map_ind = tls_search(tid);
+  
 
   //--------------Handle Error Cases-------------------//
-  if (map_ind->tid != current_thread){
+  if ((!map_ind+1)){
     printf("No TLS Entry for Current Thread\n");
     return -1;
   }
 
-  if (offset + length > map_ind->tls->size){
+  if (offset + length > map_list[map_ind].tls->size){
     printf("Buffer OOB for TLS");
     return -1;
   }
   
-  page_ind = map_ind->tls->addr;
-  //----------------loop to find start page ind---------//
-  for(int i = 1; i < page_offset; i++){
-    page_ind = page_ind->next_page;
-  }
-
   //--------------Mem Unprotect and read-----------------//
   // memcpy -> dest, src, size
   // loop to unprotect one page at a time to read from and read length in
-  for(int i = 0; i < pages_loaded; i++){
+  for(int i = start_page; i < pages_loaded; i++){
     // try to unprotect current page
-    if(mprotect((void *)page_ind->head, ps, PROT_READ | PROT_WRITE)){
+    if(mprotect((void *)map_list[map_ind].tls->, ps, PROT_READ | PROT_WRITE)){
       printf("Unable to Unprotect Page\n");
       exit(0);
     }
@@ -273,7 +260,7 @@ int tls_read(unsigned int offset, unsigned int length, char *buffer)
     
   return 0;
 }
-
+/*
 int tls_write(unsigned int offset, unsigned int length, const char *buffer)
 {
   struct mapping *map_ind = head;

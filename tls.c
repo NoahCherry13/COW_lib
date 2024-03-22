@@ -77,19 +77,28 @@ void tls_fault(int sig, siginfo_t *si, void *context){
   raise(sig);
 }
 
-tls_prot()
+tls_unprot(struct page *pg)
 {
-
+  if (mprotect((void *) pg->addr, ps, PROT_READ|PROT_WRITE)){
+    printf("Failed to Unprotect Page\n");
+    return -1;
+  }
 }
 
-tls_unprot()
+tls_prot(struct page *pg)
 {
-
+  if (mprotect((void *) pg->addr, ps, PROT_NONE)){
+    printf("Failed to Protect Page\n");
+    return -1;
+  }
 }
 
-tls_search()
+tls_search(pthread_t tid)
 {
-
+  for (int i = 0; i < MAX_THREADS; i++){
+    if(map_list[i].tid == tid) return i;
+  }
+  return -1;
 }
 
 tls_init()
@@ -115,19 +124,17 @@ int tls_create(unsigned int size)
 {
   ps = getpagesize();
   if (!init){
-
-
-    
-    return 0;
-    
+    init = 1;
+    tls_init();
   }
   
   //check if thread is already mapped to tls 
   pthread_t tid = pthread_self();
-  for(int i = 0; i < MAX_THREADS; i++){
-    if(map_list[i].tid == tid){
-      
-    }
+  int map_ind = tls_search(tid);
+  if(map_ind+1){
+    if(map_list[map_ind].tls->size){
+      printf("NON-ZERO TLS EXISTS FOR THREAD\n");
+      return -1;
   }
 
   //thread is not mapped to tls

@@ -239,10 +239,10 @@ int tls_read(unsigned int offset, unsigned int length, char *buffer)
     
     //do stuff here
     
-    if(is_first_page && offset + length > ps){
+    if(is_first_page && page_offset + length > ps){
       // in first page and need to read over page boundary
       is_first_page = !is_first_page;
-      memcpy(buffer + bytes_read, map_list[map_ind].tls->page_list[i]->addr + offset, ps - (offset + length));
+      memcpy(buffer + bytes_read, map_list[map_ind].tls->page_list[i]->addr + page_offset, ps - (page_offset + length));
       bytes_read += ps - (offset + length);
     }else if(length - bytes_read > ps){
       // not in first page and need to read full page
@@ -268,20 +268,13 @@ int tls_write(unsigned int offset, unsigned int length, const char *buffer)
   int start_page = offset / ps;
   int bytes_read = 0;
   int is_first_page = 1;
+  void *temp_mem;
+
 
   //find mapping for current thread
   pthread_t tid = pthread_self();
   int map_ind = tls_search(tid);
 
-
-  //find mapping for current thread
-  while (map_ind->next != NULL){
-    if (map_ind->tid == current_thread){
-      break;
-    }
-    map_ind = map_ind->next;
-  }
-  
 //--------------Handle Error Cases-------------------//
   if ((!map_ind+1)){
     printf("No TLS Entry for Current Thread\n");
@@ -293,17 +286,50 @@ int tls_write(unsigned int offset, unsigned int length, const char *buffer)
     return -1;
   }
   
-  //--------------Mem Unprotect and read-----------------//
-  for(int i = start_page; i < start_page + pages_read; i ++){
-    tls_unprot(map_ind[map_ind].tls->page_list[i];
-	       
+  //--------------Mem Unprotect and write-----------------//
+  for(int i = start_page; i < start_page + pages_loaded; i ++){
+
+    // Check if CoW
+    if(map_list[map_ind].tls->page_list[i]->num_ref > 1){
+      memcpy(temp_mem, (void*) map_list[map_ind].tls->page_list[i]->addr, ps);
+      map_list[map_ind].tls->page_list[i] = malloc(sizeof(struct page));
+      map_list[map_ind].tls->page_list[i]->num_ref = 1;
+      map_list[map_ind].tls->page_list[i]->addr = temp_mem;
+    }
+    tls_unprot(map_list[map_ind].tls->page_list[i]);
+
+
+    //-------------Write to Page--------------------------//
+    if(is_first_page && offset + length > ps)
+      {
+	// in first page and need to read over page boundary
+	is_first_page = !is_first_page;
+	memcpy((char *)(map_list[map_ind].tls->page_list[i]->addr + page_offset), buffer+bytes_read,  ps - (page_offset + length));
+	bytes_read += ps - (page_offset + length);
+      }
+    else if(length - bytes_read > ps)
+      {
+	// not in first page and need to read full page
+	memcpy((char*)(buffer + bytes_read), map_list[map_ind].tls->page_list[i]->addr, ps);
+	bytes_read += ps;
+      }
+    else
+      {
+	// in final page -- read rest of length from current page
+	memcpy((char*)(buffer + bytes_read), map_list[map_ind].tls->page_list[i]->addr, length - bytes_read);
+      }
+
+    // reprotect page
+    if (mprotect((void*) map_list[map_ind].tls->page_list[i], ps, PROT_NONE)) {
+      printf("Unable to Reprotect Page\n");
+      exit(0);
+    }
   }
   return 0;
 }
 
 
 
-/*
 int tls_clone(pthread_t tid)
 {
   int current_thread = pthread_self();
@@ -348,4 +374,3 @@ int tls_clone(pthread_t tid)
   
   return 0;
 }
-*/

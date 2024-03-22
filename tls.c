@@ -232,7 +232,7 @@ int tls_read(unsigned int offset, unsigned int length, char *buffer)
   // loop to unprotect one page at a time to read from and read length in
   for(int i = start_page; i < pages_loaded; i++){
     // try to unprotect current page
-    if(mprotect((void *)map_list[map_ind].tls->, ps, PROT_READ | PROT_WRITE)){
+    if(mprotect((void *)map_list[map_ind].tls->page_list[i], ps, PROT_READ | PROT_WRITE)){
       printf("Unable to Unprotect Page\n");
       exit(0);
     }
@@ -242,17 +242,17 @@ int tls_read(unsigned int offset, unsigned int length, char *buffer)
     if(is_first_page && offset + length > ps){
       // in first page and need to read over page boundary
       is_first_page = !is_first_page;
-      memcpy(buffer + bytes_read, page_ind->head + offset, ps - (offset + length));
+      memcpy(buffer + bytes_read, map_list[map_ind].tls->page_list[i]->addr + offset, ps - (offset + length));
       bytes_read += ps - (offset + length);
     }else if(length - bytes_read > ps){
       // not in first page and need to read full page
-      memcpy(buffer + bytes_read, page_ind->head + offset, ps);
+      memcpy(buffer + bytes_read, map_list[map_ind].tls->page_list[i]->addr, ps);
       bytes_read += ps;
     }else{
       // in final page -- read rest of length from current page
-      memcpy(buffer + bytes_read, page_ind->head + offset, length - bytes_read);
+      memcpy(buffer + bytes_read, map_list[map_ind].tls->page_list[i]->addr, length - bytes_read);
     }
-    if (mprotect((void*) page_ind->head, ps, PROT_NONE)) {
+    if (mprotect((void*) map_list[map_ind].tls->page_list[i], ps, PROT_NONE)) {
       printf("Unable to Reprotect Page\n");
       exit(0);
     }

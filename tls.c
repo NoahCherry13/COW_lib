@@ -8,8 +8,8 @@
 #include <stddef.h>
 #include <pthread.h>
 
-#define MAX_THREADS 128;
-#define TLS_FREE -1;
+#define MAX_THREADS 128
+#define TLS_FREE -1
 /*
  * This is a good place to define any data structures you will use in this file.
  * For example:
@@ -62,12 +62,12 @@ unsigned int byte_to_page(int bytes){
 
 void tls_fault(int sig, siginfo_t *si, void *context){
   unsigned long p_fault = ((unsigned long) si->si_addr) & ~(ps-1);
-  struct mapping *map_ind = head;
-  struct page *page_ind;
-  while(head->next!=NULL){
-    page_ind = map_ind->tls->addr;
-    while(page_ind->next_page != NULL){
-      if((unsigned long) page_ind->head == p_fault){
+ 
+ 
+  for(int i = 0; i < MAX_THREADS; i++){
+    if(!(map_list[i].tid+1)) continue;
+    for(int j = 0; j < map_list[i].tls->num_pages; j++){
+      if((unsigned long) map_list[i].tls->page_list[j] == p_fault){
 	pthread_exit(NULL);
       }
     }
@@ -77,23 +77,25 @@ void tls_fault(int sig, siginfo_t *si, void *context){
   raise(sig);
 }
 
-tls_unprot(struct page *pg)
+int tls_unprot(struct page *pg)
 {
   if (mprotect((void *) pg->addr, ps, PROT_READ|PROT_WRITE)){
     printf("Failed to Unprotect Page\n");
     return -1;
   }
+  return 0;
 }
 
-tls_prot(struct page *pg)
+int tls_prot(struct page *pg)
 {
   if (mprotect((void *) pg->addr, ps, PROT_NONE)){
     printf("Failed to Protect Page\n");
     return -1;
   }
+  return 0;
 }
 
-tls_search(pthread_t tid)
+int tls_search(pthread_t tid)
 {
   for (int i = 0; i < MAX_THREADS; i++){
     if(map_list[i].tid == tid) return i;
@@ -101,11 +103,11 @@ tls_search(pthread_t tid)
   return -1;
 }
 
-tls_init()
+void tls_init()
 {
   for(int i = 0; i < MAX_THREADS; i++){
     map_list[i].tid = TLS_FREE;
-    map_list.tls = NULL;
+    map_list[i].tls = NULL;
   }
   //initialize sig handler
     struct sigaction handler;
@@ -135,100 +137,71 @@ int tls_create(unsigned int size)
     if(map_list[map_ind].tls->size){
       printf("NON-ZERO TLS EXISTS FOR THREAD\n");
       return -1;
-  }
-
-  //thread is not mapped to tls
-
-  //create new mapping and initialize values
-  struct mapping *new_map = malloc(sizeof(struct mapping));
-  new_map->tid = tid;
-  new_map->tls = malloc(sizeof(struct tls));
-  new_map->tls->size = size;
-  new_map->tls->num_pages = byte_to_page(size);
-  
-
-  int num_pages = byte_to_page(size);
-  if (size > 0){
-    //create head of list
-    new_map->tls->addr = (struct page *) malloc(num_pages);
-    struct page *ref_page = new_map->tls->addr;
-    ref_page->head = mmap(0, ps, PROT_NONE, MAP_ANON | MAP_PRIVATE, 0, 0);
-    //populate rest of list as needed;
-    for (int i = 1; i < num_pages; i++){
-      ref_page->next_page = (struct page *) malloc(num_pages);
-      ref_page = ref_page->next_page;
-      ref_page->head = mmap(0, ps, PROT_NONE, MAP_ANON | MAP_PRIVATE, 0, 0);
-      //****************ADD CASE FOR WHEN MMAP FAILS****************//
     }
   }
 
+  //thread is not mapped to tls
   
+  //find empty ind
+  int new_ind = -1;
+  for(int i = 0; i < MAX_THREADS; i++){
+    if(map_list[i].tid == -1){
+      new_ind = i;
+    }
+  }
+  if(new_ind == -1){
+    printf("No TLS entries available\n");
+    return -1;
+  }
+
+  int num_pages = byte_to_page(size);
+  map_list[new_ind].tid = tid;
+  map_list[new_ind].tls = malloc(sizeof(struct tls));
+  map_list[new_ind].tls->size = size;
+  map_list[new_ind].tls->num_pages = num_pages;
+  
+
+  if (size){
+    //create head of list
+    map_list[new_ind].tls->page_list = (struct page **) calloc(num_pages, sizeof(struct page));
+    for(int i = 0; i < num_pages; i++){
+      map_list[new_ind].tls->page_list[i]->num_ref = 1;
+      map_list[new_ind].tls->page_list[i] = malloc(sizeof(struct page));
+      map_list[new_ind].tls->page_list[i] = mmap(0, ps,  PROT_NONE, MAP_ANON|MAP_PRIVATE, 0, 0);
+    }
+  }
 
   return 0;
 }
 
 int tls_destroy()
 {
-
-  struct mapping *map_ind = head;
-  struct page *page_ind;
-  struct page *np;
-  int current_thread = pthread_self();
-  while (map_ind->next != NULL){
-    if (map_ind->tid == current_thread){
-      break;
-    }
-    map_ind = map_ind->next;
-  }
-  
+  int current_thread = pthread_self(); 
+  int ct_ind = tls_search(current_thread);
   //--------------Handle Error Cases-------------------//
-  if (map_ind->tid != current_thread){
-    printf("No TLS Entry for Current Thread\n");
+  if(!(ct_ind+1)){
+    printf("Specied Thread Has No TLS Entry\n");
     return -1;
   }
 
-  page_ind = map_ind->tls->addr;
+  
   // traverse pages and free unreferenced
-  for(int i = 0; i < map_ind->tls->num_pages-1; i++){
-    np = page_ind->next_page;
-    page_ind->num_ref--;
-    if(page_ind->num_ref <= 0){
-      if (munmap((void *) page_ind->head, ps)){
-	printf("Unmapping Failed! Exiting...\n");
-	return(-1);
-      }
-      free(page_ind);
-      page_ind = np;
+  for(int i = 0; i < map_list[ct_ind].tls->num_pages; i++){
+    map_list[ct_ind].tls->page_list[i]->num_ref--;
+    if(map_list[ct_ind].tls->page_list[i]->num_ref <= 0){
+      munmap((void *)map_list[ct_ind].tls->page_list[i]->addr, ps);
     }
-  }
-  //free last page
-  if(page_ind->num_ref <= 0){
-    if (munmap((void *) page_ind->head, ps)){
-      printf("Unmapping Failed! Exiting...\n");
-      return(-1);
-    }
-    free(page_ind);
   }
 
   //free tls
-  free(map_ind->tls);
-
-  //patch holes in linked list
-  map_ind = head;
-  if(head->tid == current_thread){
-    head = head->next;
-    free(map_ind);
-  }else{
-    while(map_ind->next != NULL){
-      if(map_ind->next->tid == current_thread){
-	map_ind->next = map_ind->next->next;
-      }
-    }
-  }
+  free(map_list[ct_ind].tls->page_list);
+  free(map_list[ct_ind].tls);    
+  map_list[ct_ind].tls = NULL;
+  map_list[ct_ind].tid = -1;
   
   return 0;
 }
-
+/*
 int tls_read(unsigned int offset, unsigned int length, char *buffer)
 {
   struct mapping *map_ind = head;
@@ -419,3 +392,4 @@ int tls_clone(pthread_t tid)
   
   return 0;
 }
+*/

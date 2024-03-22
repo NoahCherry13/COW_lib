@@ -58,8 +58,21 @@ unsigned int byte_to_page(int bytes){
   return pages;
 }
 
-void tls_fault(int sig){
-  
+void tls_fault(int sig, siginfo_t *si, void *context){
+  unsigned long p_fault = ((unsigned long) si->si_addr) & ~(ps-1);
+  struct mapping *map_ind = head;
+  struct page *page_ind;
+  while(head->next!=NULL){
+    page_ind = map_ind->tls->addr;
+    while(page_ind->next_page != NULL){
+      if((unsigned long) page_ind->head == p_fault){
+	pthread_exit(NULL);
+      }
+    }
+  }
+  signal(SIGSEGV, SIG_DFL);
+  signal(SIGBUS, SIG_DFL);
+  raise(sig);
 }
 
 /*
@@ -75,9 +88,9 @@ int tls_create(unsigned int size)
     struct sigaction handler;
     sigemptyset(&handler.sa_mask);
     handler.sa_flags = SA_SIGINFO;
-    handler.sa_handler = tls_fault;
+    handler.sa_sigaction = tls_fault;
     sigaction(SIGSEGV, &handler, NULL);
-
+    sigaction(SIGBUS, &handler, NULL);
     //create linked list head
     struct mapping *head = malloc(sizeof(struct mapping));
     head->prev = NULL;

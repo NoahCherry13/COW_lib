@@ -6,6 +6,7 @@
 #include <sys/mman.h>
 #include <unistd.h>  //for getpagesize()
 #include <stddef.h>
+#include <pthread.h>
 /*
  * This is a good place to define any data structures you will use in this file.
  * For example:
@@ -95,12 +96,37 @@ int tls_create(unsigned int size)
     struct mapping *head = malloc(sizeof(struct mapping));
     head->prev = NULL;
     head->next = NULL;
+    head->tid = pthread_self();
+    head->tls = malloc(sizeof(struct tls));
+    head->tls->size = size;
+    head->tls->num_pages = byte_to_page(size);
+    
+    
+    int num_pages = byte_to_page(size);
+    if (size > 0){
+      //create head of list
+      head->tls->addr = (struct page *) malloc(num_pages);
+      struct page *ref_page = head->tls->addr;
+      ref_page->head = mmap(0, ps, PROT_NONE, MAP_ANON | MAP_PRIVATE, 0, 0);
+      //populate rest of list as needed;
+      for (int i = 1; i < num_pages; i++){
+	ref_page->next_page = (struct page *) malloc(num_pages);
+	ref_page = ref_page->next_page;
+	ref_page->head = mmap(0, ps, PROT_NONE, MAP_ANON | MAP_PRIVATE, 0, 0);
+	//****************ADD CASE FOR WHEN MMAP FAILS****************//
+      }
+    }
+    
+    
+    
+    return 0;
+    
   }
-
+  
   //check if thread is already mapped to tls 
   pthread_t tid = pthread_self();
   struct mapping *map_ind = head;
-
+  
   while(map_ind->next != NULL){
     map_ind = map_ind->next;
     if (map_ind->tid == tid && map_ind->tls->size){
@@ -204,7 +230,7 @@ int tls_destroy()
 int tls_read(unsigned int offset, unsigned int length, char *buffer)
 {
   struct mapping *map_ind = head;
-  struct page *page_ind = map_ind->tls->addr;
+  struct page *page_ind;
   int pages_loaded = (int)((offset + length)/ps)+(offset&&1); //number of pages to load
   int current_thread = pthread_self();
   int page_offset = offset % ps;
@@ -212,6 +238,9 @@ int tls_read(unsigned int offset, unsigned int length, char *buffer)
   int bytes_read = 0;
   int is_first_page = 1;
   //find mapping for current thread
+
+  if(head == NULL) return -1;
+
   while (map_ind->next != NULL){
     if (map_ind->tid == current_thread){
       break;
@@ -230,6 +259,7 @@ int tls_read(unsigned int offset, unsigned int length, char *buffer)
     return -1;
   }
   
+  page_ind = map_ind->tls->addr;
   //----------------loop to find start page ind---------//
   for(int i = 1; i < page_offset; i++){
     page_ind = page_ind->next_page;
@@ -272,7 +302,7 @@ int tls_read(unsigned int offset, unsigned int length, char *buffer)
 int tls_write(unsigned int offset, unsigned int length, const char *buffer)
 {
   struct mapping *map_ind = head;
-  struct page *page_ind = map_ind->tls->addr;
+  struct page *page_ind;
   int pages_loaded = (int)((offset + length)/ps)+(offset&&1); //number of pages to load
   int current_thread = pthread_self();
   int page_offset = offset % ps;
@@ -297,7 +327,7 @@ int tls_write(unsigned int offset, unsigned int length, const char *buffer)
     printf("Buffer OOB for TLS");
     return -1;
   }
-  
+  page_ind = map_ind->tls->addr;
   //----------------loop to find start page ind---------//
   for(int i = 1; i < page_offset; i++){
     page_ind = page_ind->next_page;

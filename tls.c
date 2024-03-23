@@ -98,7 +98,10 @@ int tls_prot(struct page *pg)
 int tls_search(pthread_t tid)
 {
   for (int i = 0; i < MAX_THREADS; i++){
-    if(map_list[i].tid == tid) return i;
+    if((int)map_list[i].tid == tid){
+      return i;
+      printf("found thread!\n");
+    }
   }
   return -1;
 }
@@ -147,6 +150,7 @@ int tls_create(unsigned int size)
   for(int i = 0; i < MAX_THREADS; i++){
     if(map_list[i].tid == -1){
       new_ind = i;
+      break;
     }
   }
   if(new_ind == -1){
@@ -159,10 +163,9 @@ int tls_create(unsigned int size)
   map_list[new_ind].tls = malloc(sizeof(struct tls));
   map_list[new_ind].tls->size = size;
   map_list[new_ind].tls->num_pages = num_pages;
-  
+  printf("new_ind: %d\n", new_ind);
 
   if (size){
-    //create head of list
     map_list[new_ind].tls->page_list = (struct page **) calloc(num_pages, sizeof(struct page));
     for(int i = 0; i < num_pages; i++){
       map_list[new_ind].tls->page_list[i]->num_ref = 1;
@@ -204,7 +207,7 @@ int tls_destroy()
 
 int tls_read(unsigned int offset, unsigned int length, char *buffer)
 {
-  
+  ps = getpagesize();
   int pages_loaded = (int)((offset + length)/ps)+(offset&&1); //number of pages to load
   int page_offset = offset % ps;
   int start_page = offset / ps;
@@ -263,6 +266,7 @@ int tls_read(unsigned int offset, unsigned int length, char *buffer)
 
 int tls_write(unsigned int offset, unsigned int length, const char *buffer)
 {
+  ps = getpagesize();
   int pages_loaded = (int)((offset + length)/ps)+(offset&&1); //number of pages to load
   int page_offset = offset % ps;
   int start_page = offset / ps;
@@ -332,45 +336,39 @@ int tls_write(unsigned int offset, unsigned int length, const char *buffer)
 
 int tls_clone(pthread_t tid)
 {
-  int current_thread = pthread_self();
-  struct mapping *map_ind = head;
-  struct mapping *tid_thread = head;
-  //-----------Find Current Thread---------------------//
-  while (map_ind->next != NULL){
-    if (map_ind->tid == current_thread){
-      printf("LSA Exists for Current Thread\n");
+  int map_ind = tls_search(pthread_self());
+  int tid_ind = tls_search(tid);
+  int new_ind = -1;
+  if((map_ind+1)){
+    if(map_list[map_ind].tls->size > 0){
+      printf("TLS Entry Exists for Current Thread\n");
       return -1;
     }
-    map_ind = map_ind->next;
-  }
-  //----------Find Thread Specified by TID-------------//
-  while (tid_thread->next != NULL){
-    if (tid_thread->tid == tid){
-      break;
-    }
-    tid_thread = tid_thread->next;
   }
   
-  //--------------Handle Error Cases-------------------//
-  if (tid_thread->tid != tid){
-    printf("No LSA for Specified Thread\n");
+  if(!(map_ind+1)){
+    printf("No TLS Entry for Specified Thread\n");
     return -1;
   }
   
-  map_ind->next = (struct mapping *)malloc(sizeof(struct mapping));
-  map_ind = map_ind->next;
-  map_ind->tid = pthread_self();
-  map_ind->tls = (struct tls *)malloc(sizeof(struct tls));
-  map_ind->tls->num_pages = tid_thread->tls->num_pages;
-  map_ind->tls->addr = tid_thread->tls->addr;
-  map_ind->tls->size = tid_thread->tls->size;
-
-  //increment ref count for all copied pages
-  struct page *page_ind = tid_thread->tls->addr;
-  for(int i = 0; i < tid_thread->tls->num_pages; i++){
-    page_ind->num_ref++;
-    page_ind = page_ind->next_page;
+  for (int i = 0; i < MAX_THREADS; i++){
+    if(map_list[i].tid == -1){
+      new_ind = i;
+      break;
+    }
   }
-  
+
+  map_list[new_ind].tls = (struct tls *)malloc(sizeof(struct tls));
+  map_list[new_ind].tls->size = map_list[tid_ind].tls->size;
+  map_list[new_ind].tls->num_pages = map_list[tid_ind].tls->num_pages;
+
+  if(map_list[new_ind].tls->num_pages){
+    map_list[new_ind].tls->page_list = (struct page **)calloc(map_list[new_ind].tls->num_pages, sizeof(struct page *));
+    for(int i = 0; i < map_list[new_ind].tls->num_pages; i++){
+      map_list[new_ind].tls->page_list[i] = map_list[tid_ind].tls->page_list[i];
+      map_list[new_ind].tls->page_list[i]->num_ref++;
+    }
+  }
+ 
   return 0;
 }

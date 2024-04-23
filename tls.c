@@ -7,6 +7,9 @@
 #include <unistd.h>  //for getpagesize()
 #include <stddef.h>
 #include <pthread.h>
+
+#define MAX_THREADS 128
+
 /*
  * This is a good place to define any data structures you will use in this file.
  * For example:
@@ -23,22 +26,18 @@
 struct tls{
   pthread_t tid;          // which thread
   unsigned int size;      // size of storage
-  unsigned int num_pages; // number pages allocated
-  struct page *addr;      // storage location
+  unsigned int page_count; // number pages allocated
+  struct page ** page_addr;      // storage location
 };
 
 struct page{
-  unsigned int num_ref;  // number of references to a page
-  unsigned int *head;    // start of the page
-  struct page *next_page;
-  struct page *prev_page;
+  unsigned int ref_count;  // number of references to a page
+  unsigned int *page_head;    // start of the page
 };
 
 struct mapping{
   struct tls *tls;       // tls struct for the matching thread
   pthread_t tid;         // id of the thread tls belongs to
-  struct mapping *next;  // next pointer for linked list
-  struct mapping *prev;  // previous pointer for linked list;
 };
 
 /*
@@ -46,7 +45,8 @@ struct mapping{
  * global variables.
  */
 static char init = 0;
-static struct mapping *head;
+static struct mapping thread_dict[MAX_THREADS];
+static int tls_count;
 unsigned int ps; //page size
 /*
  * With global data declared, this is a good point to start defining your
@@ -54,7 +54,6 @@ unsigned int ps; //page size
  */
 
 unsigned int byte_to_page(int bytes){
-  
   unsigned int pages = (bytes + ps/2)/ps;
   return pages;
 }
@@ -63,11 +62,14 @@ void tls_fault(int sig, siginfo_t *si, void *context){
   unsigned long p_fault = ((unsigned long) si->si_addr) & ~(ps-1);
   struct mapping *map_ind = head;
   struct page *page_ind;
-  while(head->next!=NULL){
-    page_ind = map_ind->tls->addr;
-    while(page_ind->next_page != NULL){
-      if((unsigned long) page_ind->head == p_fault){
-	pthread_exit(NULL);
+
+  for (int i = 0; i < MAX_THREADS; i++){
+    if (thread_dict[i].tid != (pthread_t) -1){
+      struct tls *tls_ptr = thread_dict[i].tid;
+      for (int j = 0; j < tls_ptr->page_count; j++){
+	if (tls_ptr->page_addr[j]->page_head == p_fault){
+	  pthread_exit(NULL);
+	}
       }
     }
   }
@@ -76,92 +78,52 @@ void tls_fault(int sig, siginfo_t *si, void *context){
   raise(sig);
 }
 
+void tls_init(){
+  ps = getpagesize();
+  // init the sig handler
+  struct sigaction handler;
+  sigemptyset(&handler.sa_mask);
+  handler.sa_flags = SA_SIGINFO;
+  handler.sa_sigaction = tls_fault;
+  sigaction(SIGSEGV, &handler, NULL);
+  sigaction(SIGBUS, &handler, NULL);
+
+  for (int i = 0; i < MAX_THREADS; i++){
+    thread_dict.tls = NULL;
+    thread_dict.tid = (unsigned long int)-1;
+  }
+}
+
+int get_key(pthread_t tid){
+  for (int i = 0; i < MAX_THREADS; i++){
+    if (tid == thread_dict[i].tid){
+      return i;
+    }
+  }
+  return -1;
+}
+
 /*
  * Lastly, here is a good place to add your externally-callable functions.
  */ 
 
 int tls_create(unsigned int size)
 {
-  ps = getpagesize();
+  
   if (!init){
-    head = malloc(sizeof(struct mapping));
-    //initialize sig handler
-    struct sigaction handler;
-    sigemptyset(&handler.sa_mask);
-    handler.sa_flags = SA_SIGINFO;
-    handler.sa_sigaction = tls_fault;
-    sigaction(SIGSEGV, &handler, NULL);
-    sigaction(SIGBUS, &handler, NULL);
-    //create linked list head
-    struct mapping *head = malloc(sizeof(struct mapping));
-    head->prev = NULL;
-    head->next = NULL;
-    head->tid = pthread_self();
-    head->tls = malloc(sizeof(struct tls));
-    head->tls->size = size;
-    head->tls->num_pages = byte_to_page(size);
-    
-    
-    int num_pages = byte_to_page(size);
-    if (size > 0){
-      //create head of list
-      head->tls->addr = (struct page *) malloc(num_pages);
-      struct page *ref_page = head->tls->addr;
-      ref_page->head = mmap(0, ps, PROT_NONE, MAP_ANON | MAP_PRIVATE, 0, 0);
-      //populate rest of list as needed;
-      for (int i = 1; i < num_pages; i++){
-	ref_page->next_page = (struct page *) malloc(num_pages);
-	ref_page = ref_page->next_page;
-	ref_page->head = mmap(0, ps, PROT_NONE, MAP_ANON | MAP_PRIVATE, 0, 0);
-	//****************ADD CASE FOR WHEN MMAP FAILS****************//
-      }
-    }
-    
-    
-    
-    return 0;
-    
+    tls_init();
+    init = 1;
   }
-  
-  //check if thread is already mapped to tls 
-  pthread_t tid = pthread_self();
-  struct mapping *map_ind = head;
-  
-  while(map_ind->next != NULL){
-    map_ind = map_ind->next;
-    if (map_ind->tid == tid && map_ind->tls->size){
-      printf("tls already assigned to thread\n{tid: %ld}\n{size: %d}", tid, map_ind->tls->size);
+
+  int key = get_key(pthread_self());
+  if (key != -1){
+    if (thread_dict[key].tls->size > 0){
+      printf("LSA Already Exists!\n");
       return -1;
     }
   }
 
-  //thread is not mapped to tls
-
-  //create new mapping and initialize values
-  struct mapping *new_map = malloc(sizeof(struct mapping));
-  new_map->tid = tid;
-  new_map->tls = malloc(sizeof(struct tls));
-  new_map->tls->size = size;
-  new_map->tls->num_pages = byte_to_page(size);
   
-
-  int num_pages = byte_to_page(size);
-  if (size > 0){
-    //create head of list
-    new_map->tls->addr = (struct page *) malloc(num_pages);
-    struct page *ref_page = new_map->tls->addr;
-    ref_page->head = mmap(0, ps, PROT_NONE, MAP_ANON | MAP_PRIVATE, 0, 0);
-    //populate rest of list as needed;
-    for (int i = 1; i < num_pages; i++){
-      ref_page->next_page = (struct page *) malloc(num_pages);
-      ref_page = ref_page->next_page;
-      ref_page->head = mmap(0, ps, PROT_NONE, MAP_ANON | MAP_PRIVATE, 0, 0);
-      //****************ADD CASE FOR WHEN MMAP FAILS****************//
-    }
-  }
-
-  
-
   return 0;
 }
 

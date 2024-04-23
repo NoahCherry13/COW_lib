@@ -59,8 +59,8 @@ unsigned int byte_to_page(int bytes){
 }
 
 void tls_fault(int sig, siginfo_t *si, void *context){
-  unsigned long p_fault = ((unsigned long) si->si_addr) & ~(ps-1);
-  struct mapping *map_ind = head;
+  
+  unsigned long p_fault = ((unsigned long) si->si_addr) & ~(ps-1); 
   struct page *page_ind;
 
   for (int i = 0; i < MAX_THREADS; i++){
@@ -103,6 +103,16 @@ int get_key(pthread_t tid){
   return -1;
 }
 
+int find_free_tls()
+{
+  for (int i = 0; i < MAX_THREADS; i++){
+    if (thread_dict[i].tid == -1){
+      return i;
+    }
+  }
+  return -1;
+}
+
 /*
  * Lastly, here is a good place to add your externally-callable functions.
  */ 
@@ -116,17 +126,39 @@ int tls_create(unsigned int size)
   }
 
   int key = get_key(pthread_self());
+  int new_entry = -1;
+  struct tls* tls_ptr;
+
+
   if (key != -1){
     if (thread_dict[key].tls->size > 0){
       printf("LSA Already Exists!\n");
       return -1;
     }
+    tls_ptr = thread_dict[key].tls;
+  }
+  else {
+    new_entry = find_free_tls();
+    if (new_entry == -1){
+      printf("No Empty Entries!\n");
+      return -1;
+    }
+
+    tls_ptr = malloc(sizeof(struct tls));
+    thread_dict[new_entry]->tls = tls_ptr;
+    thread_dict[new_entry]->tid = pthread_self();
+    
+    tls_ptr->tid = pthread_self();
+    tls_ptr->size = 0;
+    tls_ptr->page_count = 0;
+    tls_ptr->page_addr = NULL;
   }
 
-  
   return 0;
 }
 
+
+/*
 int tls_destroy()
 {
 
@@ -379,3 +411,4 @@ int tls_clone(pthread_t tid)
   
   return 0;
 }
+*/

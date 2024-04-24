@@ -137,6 +137,22 @@ void reset_entry(int ind){
   thread_dict[ind].tls = NULL;
 }
 
+void tls_unprotect(struct page *page_ptr){
+  if (mprotect((void*) p->address, page_size, PROT_READ | PROT_WRITE)) {
+    printf("Failed to unprot page\n");
+    exit(1);
+  }
+}
+
+void tls_protect(struct page *page_ptr){
+
+  // Check if it was able to successfully protect the page
+  if (mprotect((void*) p->address, page_size, PROT_NONE)) {
+    printf("Failed to unprot page\n");
+    exit(1);
+  }
+}
+
 /*
  * Lastly, here is a good place to add your externally-callable functions.
  */ 
@@ -253,8 +269,10 @@ int tls_read(unsigned int offset, unsigned int length, char *buffer)
   // reference pointers
   tls_ptr = thread_dict[tid_ind].tls;
   page_addr = thread_dict[tid_ind].tls->page_addr;
-
   
+  for (int i = 0; i < pages_to_read; i++){
+    
+  }
   
   return 0;
 }

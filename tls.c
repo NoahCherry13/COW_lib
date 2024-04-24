@@ -138,7 +138,7 @@ void reset_entry(int ind){
 }
 
 void tls_unprotect(struct page *page_ptr){
-  if (mprotect((void*) p->address, page_size, PROT_READ | PROT_WRITE)) {
+  if (mprotect((void*) page_ptr->page_head, ps, PROT_READ | PROT_WRITE)) {
     printf("Failed to unprot page\n");
     exit(1);
   }
@@ -147,7 +147,7 @@ void tls_unprotect(struct page *page_ptr){
 void tls_protect(struct page *page_ptr){
 
   // Check if it was able to successfully protect the page
-  if (mprotect((void*) p->address, page_size, PROT_NONE)) {
+  if (mprotect((void*) page_ptr->page_head, ps, PROT_NONE)) {
     printf("Failed to unprot page\n");
     exit(1);
   }
@@ -258,6 +258,7 @@ int tls_read(unsigned int offset, unsigned int length, char *buffer)
   int pages_to_read = length / ps + offset_flag;
   int bytes_read = 0;
   int bytes_left = length;
+  int current_read;
   struct page **page_addr;
   struct tls *tls_ptr;
   
@@ -268,133 +269,29 @@ int tls_read(unsigned int offset, unsigned int length, char *buffer)
   }
   // reference pointers
   tls_ptr = thread_dict[tid_ind].tls;
-  page_addr = thread_dict[tid_ind].tls->page_addr;
+  page_addr = tls_ptr->page_addr;
   
   for (int i = 0; i < pages_to_read; i++){
-    
+    tls_unprotect(page_addr[i + start_page]);
+    if (bytes_left + bytes_read >= ps){
+      current_read = 0;
+    } else {
+      current_read = bytes_left;
+    }
+
+    memcpy(buffer + bytes_read, (char *)page_addr[i]->page_head + start_page_offset, current_read);
+    start_page_offset = 0;
+    bytes_read += current_read;
+    bytes_left -= current_read;
+    tls_protect(page_addr[i]);
   }
   
   return 0;
 }
 
 
-/*
 int tls_write(unsigned int offset, unsigned int length, const char *buffer)
 {
-  struct mapping *map_ind = head;
-  struct page *page_ind;
-  int pages_loaded = (int)((offset + length)/ps)+(offset&&1); //number of pages to load
-  int current_thread = pthread_self();
-  int page_offset = offset % ps;
-  //int start_page = offset / ps;
-  int bytes_written = 0;
-  int is_first_page = 1;
-  //find mapping for current thread
-  while (map_ind->next != NULL){
-    if (map_ind->tid == current_thread){
-      break;
-    }
-    map_ind = map_ind->next;
-  }
-  
-  //--------------Handle Error Cases-------------------//
-  if (map_ind->tid != current_thread){
-    printf("No TLS Entry for Current Thread\n");
-    return -1;
-  }
-  
-  if (offset + length > map_ind->tls->size){
-    printf("Buffer OOB for TLS");
-    return -1;
-  }
-  page_ind = map_ind->tls->addr;
-  //----------------loop to find start page ind---------//
-  for(int i = 1; i < page_offset; i++){
-    page_ind = page_ind->next_page;
-  }
-  
-  //--------------Mem Unprotect and read-----------------//
-  // memcpy -> dest, src, size
-  // loop to unprotect one page at a time to read from and read length in
-  for(int i = 0; i < pages_loaded; i++){
-    // try to unprotect current page
-    if(mprotect((void *)page_ind->head, ps, PROT_READ | PROT_WRITE)){
-      printf("Unable to Unprotect Page\n");
-      exit(0);
-    }
-    
-    //do stuff here
-    if(page_ind->num_ref > 1){
-      // tls is already referenced by another thread      
-      void *temp_page = mmap(0, ps, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, 0, 0);
-      page_ind->num_ref = 1;
-      memcpy(temp_page, page_ind->head, ps);
-      page_ind = temp_page;
-    }
-
-    
-    if(is_first_page && offset + length > ps){
-      // in first page and need to read over page boundary
-      is_first_page = !is_first_page;
-      memcpy(page_ind->head + page_offset, buffer + bytes_written, ps-offset);
-    }else if(length - bytes_written > ps){
-      // not in first page and need to read full page
-      memcpy(page_ind->head, buffer + bytes_written, ps);
-    }else{
-      // in final page -- read rest of length from current page
-      memcpy(page_ind->head, buffer + bytes_written, length-bytes_written);
-    }
-    if (mprotect((void*) page_ind->head, ps, PROT_NONE)) {
-      printf("Unable to Reprotect Page\n");
-      exit(0);
-    }
-  }
   
   return 0;
 }
-
-int tls_clone(pthread_t tid)
-{
-  int current_thread = pthread_self();
-  struct mapping *map_ind = head;
-  struct mapping *tid_thread = head;
-  //-----------Find Current Thread---------------------//
-  while (map_ind->next != NULL){
-    if (map_ind->tid == current_thread){
-      printf("LSA Exists for Current Thread\n");
-      return -1;
-    }
-    map_ind = map_ind->next;
-  }
-  //----------Find Thread Specified by TID-------------//
-  while (tid_thread->next != NULL){
-    if (tid_thread->tid == tid){
-      break;
-    }
-    tid_thread = tid_thread->next;
-  }
-  
-  //--------------Handle Error Cases-------------------//
-  if (tid_thread->tid != tid){
-    printf("No LSA for Specified Thread\n");
-    return -1;
-  }
-  
-  map_ind->next = (struct mapping *)malloc(sizeof(struct mapping));
-  map_ind = map_ind->next;
-  map_ind->tid = pthread_self();
-  map_ind->tls = (struct tls *)malloc(sizeof(struct tls));
-  map_ind->tls->num_pages = tid_thread->tls->num_pages;
-  map_ind->tls->addr = tid_thread->tls->addr;
-  map_ind->tls->size = tid_thread->tls->size;
-
-  //increment ref count for all copied pages
-  struct page *page_ind = tid_thread->tls->addr;
-  for(int i = 0; i < tid_thread->tls->num_pages; i++){
-    page_ind->num_ref++;
-    page_ind = page_ind->next_page;
-  }
-  
-  return 0;
-}
-*/

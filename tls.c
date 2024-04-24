@@ -40,19 +40,25 @@ struct mapping{
   pthread_t tid;         // id of the thread tls belongs to
 };
 
+
+
+
 /*
  * Now that data structures are defined, here's a good place to declare any
  * global variables.
  */
 static char init = 0;
 static struct mapping thread_dict[MAX_THREADS];
-static int tls_count;
+//static int tls_count;
 unsigned int ps; //page size
+
+
+
+
 /*
  * With global data declared, this is a good point to start defining your
  * static helper functions.
  */
-
 unsigned int byte_to_page(int bytes){
   unsigned int pages = (bytes + ps/2)/ps;
   return pages;
@@ -61,13 +67,14 @@ unsigned int byte_to_page(int bytes){
 void tls_fault(int sig, siginfo_t *si, void *context){
   
   unsigned long p_fault = ((unsigned long) si->si_addr) & ~(ps-1); 
-  struct page *page_ind;
+  //struct page *page_ind;
+  struct tls *tls_ptr;
 
   for (int i = 0; i < MAX_THREADS; i++){
     if (thread_dict[i].tid != (pthread_t) -1){
-      struct tls *tls_ptr = thread_dict[i].tid;
+      tls_ptr = thread_dict[i].tls;
       for (int j = 0; j < tls_ptr->page_count; j++){
-	if (tls_ptr->page_addr[j]->page_head == p_fault){
+	if ((unsigned long)tls_ptr->page_addr[j]->page_head == p_fault){
 	  pthread_exit(NULL);
 	}
       }
@@ -89,8 +96,8 @@ void tls_init(){
   sigaction(SIGBUS, &handler, NULL);
 
   for (int i = 0; i < MAX_THREADS; i++){
-    thread_dict.tls = NULL;
-    thread_dict.tid = (unsigned long int)-1;
+    thread_dict[i].tls = NULL;
+    thread_dict[i].tid = (unsigned long int)-1;
   }
 }
 
@@ -112,6 +119,9 @@ int find_free_tls()
   }
   return -1;
 }
+
+
+
 
 /*
  * Lastly, here is a good place to add your externally-callable functions.
@@ -145,8 +155,8 @@ int tls_create(unsigned int size)
     }
 
     tls_ptr = malloc(sizeof(struct tls));
-    thread_dict[new_entry]->tls = tls_ptr;
-    thread_dict[new_entry]->tid = pthread_self();
+    thread_dict[new_entry].tls = tls_ptr;
+    thread_dict[new_entry].tid = pthread_self();
     
     tls_ptr->tid = pthread_self();
     tls_ptr->size = 0;
@@ -154,6 +164,8 @@ int tls_create(unsigned int size)
     tls_ptr->page_addr = NULL;
   }
 
+  if (num)
+  
   return 0;
 }
 

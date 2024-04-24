@@ -43,9 +43,12 @@ void* test2(void* arg){
 // Main function creates 2 threads then sleeps
 
 void *test(){
-  int count = 0;
-  for (int i = 0; i < 0xFF; i++){
-    count += 1;
+  //int count = 0;
+  for (int i = 0; i < 10; i++){
+    printf("creating tls\n");
+    tls_create(1);
+    printf("destroying tls\n");
+    tls_destroy();
   }
   return NULL;
 }
@@ -56,13 +59,13 @@ int main(){
   if (pthread_create(&tid2, NULL, test, &tid) != 0){
     perror("Error: ");
   }
-
+  
   if (pthread_create(&tid, NULL, test, NULL) != 0){
     perror("Error: ");
   }
-
-
-  sleep(5);
+  
+  
+  //  sleep(5);
 
 }
 

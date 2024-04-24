@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <unistd.h>
 
+/*
 // Function for thread 1: Create TLS, write and read to it, wait then read from it again
 void* test(void* arg){
   if (tls_read(0, 7, "hello!")) printf("bruh\n");
@@ -38,12 +39,21 @@ void* test2(void* arg){
 
   return NULL;
 }
-
+*/
 // Main function creates 2 threads then sleeps
+
+void *test(){
+  int count = 0;
+  for (int i = 0; i < 0xFF; i++){
+    count += 1;
+  }
+  return NULL;
+}
+
 int main(){
   pthread_t tid;
   pthread_t tid2;
-  if (pthread_create(&tid2, NULL, test2, &tid) != 0){
+  if (pthread_create(&tid2, NULL, test, &tid) != 0){
     perror("Error: ");
   }
 
@@ -55,3 +65,5 @@ int main(){
   sleep(5);
 
 }
+
+

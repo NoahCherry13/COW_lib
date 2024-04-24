@@ -49,7 +49,7 @@ struct mapping{
  */
 static char init = 0;
 static struct mapping thread_dict[MAX_THREADS];
-//static int tls_count;
+static int tls_count;
 unsigned int ps; //page size
 
 
@@ -137,6 +137,7 @@ int tls_create(unsigned int size)
 
   int key = get_key(pthread_self());
   int new_entry = -1;
+  int pages;
   struct tls* tls_ptr;
 
 
@@ -164,13 +165,25 @@ int tls_create(unsigned int size)
     tls_ptr->page_addr = NULL;
   }
 
-  if (num)
+  pages = size / ps;
+  pages += (size % ps > 0);
+  tls_ptr->size = pages * ps;
   
+  if (pages){
+    tls_ptr->page_addr = malloc(pages * sizeof(struct page));
+    for (int i = 0; i < pages; i++){
+      tls_ptr->page_addr[i] = malloc(sizeof(struct page));
+      tls_ptr->page_addr[i] = mmap(0, ps, PROT_NONE, MAP_ANON | MAP_PRIVATE, 0, 0);
+      tls_ptr->page_addr[i]->ref_count = 1;
+    }
+    tls_ptr->page_count = pages;
+  }
+  tls_count++;
   return 0;
 }
 
 
-/*
+
 int tls_destroy()
 {
 
@@ -232,7 +245,7 @@ int tls_destroy()
   
   return 0;
 }
-
+/*
 int tls_read(unsigned int offset, unsigned int length, char *buffer)
 {
   struct mapping *map_ind = head;

@@ -120,7 +120,15 @@ int find_free_tls()
   return -1;
 }
 
-
+int search_tid(pthread_t tid)
+{
+  for (int i = 0; i < MAX_THREADS; i++){
+    if (thread_dict[i].tid == tid){
+      return i;
+    }
+  }
+  return -1;
+}
 
 
 /*
@@ -186,63 +194,6 @@ int tls_create(unsigned int size)
 
 int tls_destroy()
 {
-
-  struct mapping *map_ind = head;
-  struct page *page_ind;
-  struct page *np;
-  int current_thread = pthread_self();
-  while (map_ind->next != NULL){
-    if (map_ind->tid == current_thread){
-      break;
-    }
-    map_ind = map_ind->next;
-  }
-  
-  //--------------Handle Error Cases-------------------//
-  if (map_ind->tid != current_thread){
-    printf("No TLS Entry for Current Thread\n");
-    return -1;
-  }
-
-  page_ind = map_ind->tls->addr;
-  // traverse pages and free unreferenced
-  for(int i = 0; i < map_ind->tls->num_pages-1; i++){
-    np = page_ind->next_page;
-    page_ind->num_ref--;
-    if(page_ind->num_ref <= 0){
-      if (munmap((void *) page_ind->head, ps)){
-	printf("Unmapping Failed! Exiting...\n");
-	return(-1);
-      }
-      free(page_ind);
-      page_ind = np;
-    }
-  }
-  //free last page
-  if(page_ind->num_ref <= 0){
-    if (munmap((void *) page_ind->head, ps)){
-      printf("Unmapping Failed! Exiting...\n");
-      return(-1);
-    }
-    free(page_ind);
-  }
-
-  //free tls
-  free(map_ind->tls);
-
-  //patch holes in linked list
-  map_ind = head;
-  if(head->tid == current_thread){
-    head = head->next;
-    free(map_ind);
-  }else{
-    while(map_ind->next != NULL){
-      if(map_ind->next->tid == current_thread){
-	map_ind->next = map_ind->next->next;
-      }
-    }
-  }
-  
   return 0;
 }
 /*

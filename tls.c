@@ -279,11 +279,11 @@ int tls_read(unsigned int offset, unsigned int length, char *buffer)
       current_read = bytes_left;
     }
 
-    memcpy(buffer + bytes_read, (char *)page_addr[i]->page_head + start_page_offset, current_read);
+    memcpy(buffer + bytes_read, (char *)page_addr[i + start_page]->page_head + start_page_offset, current_read);
     start_page_offset = 0;
     bytes_read += current_read;
     bytes_left -= current_read;
-    tls_protect(page_addr[i]);
+    tls_protect(page_addr[i + start_page]);
   }
   
   return 0;
@@ -292,6 +292,47 @@ int tls_read(unsigned int offset, unsigned int length, char *buffer)
 
 int tls_write(unsigned int offset, unsigned int length, const char *buffer)
 {
+  int tid_ind = search_tid(pthread_self());
+  int start_page = offset / ps;
+  int start_page_offset = offset % ps;
+  int offset_flag = ((offset + length) % ps > 0) + ((offset + length) / ps > 0);
+  int pages_to_write = length / ps + offset_flag;
+  int bytes_written = 0;
+  int bytes_left = length;
+  int current_write;
+  struct page **page_addr;
+  struct tls *tls_ptr;
   
+  if (tid_ind == -1){
+    printf("No TLS Entry to Destroy\n");
+    return -1;
+  }
+  // reference pointers
+  tls_ptr = thread_dict[tid_ind].tls;
+  page_addr = tls_ptr->page_addr;
+  
+  for (int i = 0; i < pages_to_write; i++){
+    tls_unprotect(page_addr[i + start_page]);
+    if(page_addr[i + start_page]->ref_count > 1){
+      void *memptr = mmap(0, ps, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, 0, 0);
+      memcpy(memptr, page_addr[i + start_page]->page_head, ps);
+      tls_protect(page_addr[i + start_page]);
+
+      page_addr[i + start_page] = malloc(sizeof(struct page));
+      page_addr[i + start_page]->page_head = memptr;
+      page_addr[i + start_page]->ref_count = 1;
+    }
+    if (bytes_left + bytes_written >= ps){
+      current_write = 0;
+    } else {
+      current_write = bytes_left;
+    }
+
+    memcpy(page_addr[i + start_page]->page_head + start_page_offset, buffer + bytes_written, current_write);
+    bytes_written += current_write;
+    bytes_left -= current_write;
+    start_page_offset = 0;
+    tls_protect(page_addr[i + start_page]);
+  }
   return 0;
 }

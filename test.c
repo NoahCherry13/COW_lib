@@ -3,11 +3,11 @@
 #include <stdio.h>
 #include <unistd.h>
 
-/*
+
 // Function for thread 1: Create TLS, write and read to it, wait then read from it again
 void* test(void* arg){
   if (tls_read(0, 7, "hello!")) printf("bruh\n");
-  if (tls_create(1.5 * getpagesize())) printf("bruh\n");
+  if (tls_create(2 * getpagesize())) printf("bruh\n");
   if (tls_write(0, 7, "hello!")) printf("bruh\n");
   char m[7];
   if (tls_read(0, 7, m)) printf("bruh\n");
@@ -39,9 +39,9 @@ void* test2(void* arg){
 
   return NULL;
 }
-*/
-// Main function creates 2 threads then sleeps
 
+// Main function creates 2 threads then sleeps
+/*
 void *test(){
   //int count = 0;
   for (int i = 0; i < 10; i++){
@@ -52,11 +52,13 @@ void *test(){
   }
   return NULL;
 }
+*/
 
 int main(){
   pthread_t tid;
   pthread_t tid2;
-  if (pthread_create(&tid2, NULL, test, &tid) != 0){
+  printf("creating 2\n");
+  if (pthread_create(&tid2, NULL, test2, &tid) != 0){
     perror("Error: ");
   }
   

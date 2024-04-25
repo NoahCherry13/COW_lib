@@ -282,8 +282,8 @@ int tls_read(unsigned int offset, unsigned int length, char *buffer)
   
   for (int i = 0; i < pages_to_read; i++){
     tls_unprotect(page_addr[i + start_page]);
-    if (bytes_left + bytes_read >= ps){
-      current_read = 0;
+    if (bytes_left + start_page_offset >= ps){
+      current_read = ps - start_page_offset;
     } else {
       current_read = bytes_left;
     }
@@ -302,7 +302,6 @@ int tls_read(unsigned int offset, unsigned int length, char *buffer)
 int tls_write(unsigned int offset, unsigned int length, const char *buffer)
 {
   int tid_ind = search_tid(pthread_self());
-
   // check if tls entry exists to be read
   if (tid_ind == -1){
     printf("No TLS Entry to Read\n");
@@ -335,12 +334,14 @@ int tls_write(unsigned int offset, unsigned int length, const char *buffer)
       memcpy(memptr, page_addr[i + start_page]->page_head, ps);
       tls_protect(page_addr[i + start_page]);
 
+      for(int i = 0; i < length; i++) printf("%c",((char*)memptr)[i]);
+      printf("\n");
       page_addr[i + start_page] = malloc(sizeof(struct page));
       page_addr[i + start_page]->page_head = memptr;
       page_addr[i + start_page]->ref_count = 1;
     }
-    if (bytes_left + bytes_written >= ps){
-      current_write = 0;
+    if (bytes_left + start_page_offset >= ps){
+      current_write = ps - start_page_offset;
     } else {
       current_write = bytes_left;
     }

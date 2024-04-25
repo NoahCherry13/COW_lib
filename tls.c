@@ -8,7 +8,7 @@
 #include <stddef.h>
 #include <pthread.h>
 
-#define MAX_THREADS 128
+#define MAX_THREADS 512
 
 /*
  * This is a good place to define any data structures you will use in this file.
@@ -208,7 +208,7 @@ int tls_create(unsigned int size)
    
     tls_ptr->page_count = pages;
   }
-  printf("Pages: %d\n", pages);
+  //printf("Pages: %d\n", pages);
   tls_count++;
   return 0;
 }
@@ -361,18 +361,14 @@ int tls_clone (pthread_t tid){
   
   thread_key = find_free_tls();
   clone_tls = thread_dict[clone_key].tls;
-  //printf("clone tls from dict: %lx\n", (unsigned long int)thread_dict[clone_key].tls);
-  //printf("clone tls: %lx\n", (unsigned long int)clone_tls);
   thread_tls = malloc(sizeof(struct tls));
   thread_dict[thread_key].tls = thread_tls;
   thread_dict[thread_key].tid = pthread_self();
 
-  
   thread_tls->page_count = clone_tls->page_count;
   thread_tls->tid = pthread_self();
   thread_tls->size = clone_tls->size;
   thread_tls->page_addr = NULL;
-
   
   if(clone_tls->page_count > 0){
     thread_tls->page_addr = malloc(clone_tls->page_count * sizeof(struct page)); 

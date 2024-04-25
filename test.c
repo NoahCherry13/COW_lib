@@ -25,11 +25,9 @@ void* test(void* arg){
 
 // Function for thread 2: Clone TLS from thread 1, read from it, then write and read again
 void* test2(void* arg){
-  printf("in test2\n");
   sleep(1);
   pthread_t * pid = arg;
   if (tls_clone(*pid)) printf("bruh\n");
-  printf("after clone\n");
   char m[7];
   if (tls_read(0, 7, m)) printf("bruh\n");
   printf("thread 2: %s\n", m);
@@ -40,7 +38,6 @@ void* test2(void* arg){
   if (tls_read(0, 7, m)) printf("bruh\n");
   printf("thread 2 again: %s\n", m);
   if (tls_destroy()) printf("bruh\n");
-  printf("exiting test2\n");
   return NULL;
 }
 

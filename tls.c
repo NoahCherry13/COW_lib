@@ -159,7 +159,7 @@ void tls_protect(struct page *page_ptr){
 
 int tls_create(unsigned int size)
 {
-  printf("creating\n");
+  
   if (!init){
     tls_init();
     init = 1;
@@ -194,11 +194,10 @@ int tls_create(unsigned int size)
     tls_ptr->page_count = 0;
     tls_ptr->page_addr = NULL;
   }
-
+  pages = 0;
   pages = size / ps;
-  pages += (size % ps > 0);
+  pages += ((size % ps) > 0);
   tls_ptr->size = pages * ps;
-
   if (pages){
     tls_ptr->page_addr = malloc(pages * sizeof(struct page));
     for (int i = 0; i < pages; i++){
@@ -206,8 +205,10 @@ int tls_create(unsigned int size)
       tls_ptr->page_addr[i]->page_head = mmap(0, ps, PROT_NONE, MAP_ANON | MAP_PRIVATE, 0, 0);
       tls_ptr->page_addr[i]->ref_count = 1;
     }
+   
     tls_ptr->page_count = pages;
   }
+  printf("Pages: %d\n", pages);
   tls_count++;
   return 0;
 }
@@ -230,21 +231,22 @@ int tls_destroy()
   page_addr = thread_dict[tid_ind].tls->page_addr;
 
   // free unref pages
-  for (int i = 0; i < tls_ptr->page_count-1; i++){
+  for (int i = 0; i < tls_ptr->page_count; i++){
     page_addr[i]->ref_count--;
 
     //check if page ref
+   
     if (!page_addr[i]->ref_count){
       munmap((void *) page_addr[i]->page_head, ps);
       free(page_addr[i]);
      
     }
     //free(page_addr);
-    free(tls_ptr);
-    reset_entry(tid_ind);
-    printf("pages freed\n");
+   
   }
-
+  free(tls_ptr);
+  reset_entry(tid_ind);
+ 
   return 0;
 }
 
@@ -254,8 +256,8 @@ int tls_read(unsigned int offset, unsigned int length, char *buffer)
   int tid_ind = search_tid(pthread_self());
   int start_page = offset / ps;
   int start_page_offset = offset % ps;
-  int offset_flag = ((offset + length) % ps > 0) + ((offset + length) / ps > 0);
-  int pages_to_read = length / ps + offset_flag;
+  int offset_flag = ((offset + length) % ps > 0);
+  int pages_to_read = (length + start_page_offset) / ps + offset_flag;
   int bytes_read = 0;
   int bytes_left = length;
   int current_read;
@@ -295,8 +297,8 @@ int tls_write(unsigned int offset, unsigned int length, const char *buffer)
   int tid_ind = search_tid(pthread_self());
   int start_page = offset / ps;
   int start_page_offset = offset % ps;
-  int offset_flag = ((offset + length) % ps > 0) + ((offset + length) / ps > 0);
-  int pages_to_write = length / ps + offset_flag;
+  int offset_flag = ((offset + length) % ps > 0);
+  int pages_to_write = (length + start_page_offset) / ps + offset_flag;
   int bytes_written = 0;
   int bytes_left = length;
   int current_write;
@@ -339,13 +341,13 @@ int tls_write(unsigned int offset, unsigned int length, const char *buffer)
 
 int tls_clone (pthread_t tid){
 
-  printf("cloning\n");
+  
   int clone_key = search_tid(tid);
   int thread_key = search_tid(pthread_self());
   struct tls *clone_tls;
   struct tls *thread_tls;
   // check if tid has a dictionary entry
-  printf("clone key: %d\nthread key: %d\n", clone_key, thread_key);
+  
   if (clone_key == -1){
     printf("No TLS Entry for Specified Thread\n");
     return -1;
@@ -366,12 +368,12 @@ int tls_clone (pthread_t tid){
   thread_dict[thread_key].tid = pthread_self();
 
   
-  thread_tls->page_count = 5;
+  thread_tls->page_count = clone_tls->page_count;
   thread_tls->tid = pthread_self();
   thread_tls->size = clone_tls->size;
   thread_tls->page_addr = NULL;
 
-  printf("copying pages\n");
+  
   if(clone_tls->page_count > 0){
     thread_tls->page_addr = malloc(clone_tls->page_count * sizeof(struct page)); 
     for (int i = 0; i < clone_tls->page_count; i++){

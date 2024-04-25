@@ -128,7 +128,6 @@ int search_tid(pthread_t tid)
       return i;
     }
   }
-  printf("tid not found by call\n");
   return -1;
 }
 
@@ -334,8 +333,8 @@ int tls_write(unsigned int offset, unsigned int length, const char *buffer)
       memcpy(memptr, page_addr[i + start_page]->page_head, ps);
       tls_protect(page_addr[i + start_page]);
 
-      for(int i = 0; i < length; i++) printf("%c",((char*)memptr)[i]);
-      printf("\n");
+      //for(int i = 0; i < length; i++) printf("%c",((char*)memptr)[i]);
+      //printf("\n");
       page_addr[i + start_page] = malloc(sizeof(struct page));
       page_addr[i + start_page]->page_head = memptr;
       page_addr[i + start_page]->ref_count = 1;

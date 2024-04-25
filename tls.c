@@ -264,14 +264,22 @@ int tls_read(unsigned int offset, unsigned int length, char *buffer)
   struct page **page_addr;
   struct tls *tls_ptr;
   
+  
+  
   // check if tls entry exists to be read
   if (tid_ind == -1){
     printf("No TLS Entry to Destroy\n");
     return -1;
   }
+  
   // reference pointers
   tls_ptr = thread_dict[tid_ind].tls;
   page_addr = tls_ptr->page_addr;
+
+  if (tls_ptr->size < (length + offset)){
+    printf("Read too big for TLS\n");
+    return -1;
+  }
   
   for (int i = 0; i < pages_to_read; i++){
     tls_unprotect(page_addr[i + start_page]);
@@ -312,6 +320,11 @@ int tls_write(unsigned int offset, unsigned int length, const char *buffer)
   // reference pointers
   tls_ptr = thread_dict[tid_ind].tls;
   page_addr = tls_ptr->page_addr;
+
+  if (tls_ptr->size < (length + offset)){
+    printf("Write too big for TLS\n");
+    return -1;
+  }
   
   for (int i = 0; i < pages_to_write; i++){
     tls_unprotect(page_addr[i + start_page]);

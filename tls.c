@@ -128,6 +128,7 @@ int search_tid(pthread_t tid)
       return i;
     }
   }
+  printf("tid not found by call\n");
   return -1;
 }
 
@@ -254,6 +255,12 @@ int tls_destroy()
 int tls_read(unsigned int offset, unsigned int length, char *buffer)
 {
   int tid_ind = search_tid(pthread_self());
+  // check if tls entry exists to be read
+  if (tid_ind == -1){
+    printf("No TLS Entry to Read\n");
+    return -1;
+  }
+
   int start_page = offset / ps;
   int start_page_offset = offset % ps;
   int offset_flag = ((offset + length) % ps > 0);
@@ -263,15 +270,7 @@ int tls_read(unsigned int offset, unsigned int length, char *buffer)
   int current_read;
   struct page **page_addr;
   struct tls *tls_ptr;
-  
-  
-  
-  // check if tls entry exists to be read
-  if (tid_ind == -1){
-    printf("No TLS Entry to Destroy\n");
-    return -1;
-  }
-  
+   
   // reference pointers
   tls_ptr = thread_dict[tid_ind].tls;
   page_addr = tls_ptr->page_addr;
@@ -303,6 +302,13 @@ int tls_read(unsigned int offset, unsigned int length, char *buffer)
 int tls_write(unsigned int offset, unsigned int length, const char *buffer)
 {
   int tid_ind = search_tid(pthread_self());
+
+  // check if tls entry exists to be read
+  if (tid_ind == -1){
+    printf("No TLS Entry to Read\n");
+    return -1;
+  }
+  
   int start_page = offset / ps;
   int start_page_offset = offset % ps;
   int offset_flag = ((offset + length) % ps > 0);
@@ -312,11 +318,7 @@ int tls_write(unsigned int offset, unsigned int length, const char *buffer)
   int current_write;
   struct page **page_addr;
   struct tls *tls_ptr;
-  
-  if (tid_ind == -1){
-    printf("No TLS Entry to Destroy\n");
-    return -1;
-  }
+ 
   // reference pointers
   tls_ptr = thread_dict[tid_ind].tls;
   page_addr = tls_ptr->page_addr;

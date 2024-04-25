@@ -6,7 +6,9 @@
 
 // Function for thread 1: Create TLS, write and read to it, wait then read from it again
 void* test(void* arg){
-  if (tls_read(0, 7, "hello!")) printf("bruh\n");
+ 
+  //if (tls_read(0, 7, "hello!")) printf("bruh\n");    //FIX ERROR CHECKING FOR READ AND WRITE
+ 
   if (tls_create(2 * getpagesize())) printf("bruh\n");
   if (tls_write(0, 7, "hello!")) printf("bruh\n");
   char m[7];
@@ -23,9 +25,11 @@ void* test(void* arg){
 
 // Function for thread 2: Clone TLS from thread 1, read from it, then write and read again
 void* test2(void* arg){
+  printf("in test2\n");
   sleep(1);
   pthread_t * pid = arg;
   if (tls_clone(*pid)) printf("bruh\n");
+  printf("after clone\n");
   char m[7];
   if (tls_read(0, 7, m)) printf("bruh\n");
   printf("thread 2: %s\n", m);
@@ -34,9 +38,9 @@ void* test2(void* arg){
   if (tls_read(getpagesize()+1, 7, m)) printf("bruh\n");
   printf("thread 2: %s\n", m);
   if (tls_read(0, 7, m)) printf("bruh\n");
-  printf("thread 2: %s\n", m);
+  printf("thread 2 again: %s\n", m);
   if (tls_destroy()) printf("bruh\n");
-
+  printf("exiting test2\n");
   return NULL;
 }
 
@@ -67,7 +71,7 @@ int main(){
   }
   
   
-  //  sleep(5);
+  sleep(5);
 
 }
 

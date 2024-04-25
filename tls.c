@@ -159,7 +159,7 @@ void tls_protect(struct page *page_ptr){
 
 int tls_create(unsigned int size)
 {
-  
+  printf("creating\n");
   if (!init){
     tls_init();
     init = 1;
@@ -345,6 +345,7 @@ int tls_clone (pthread_t tid){
   struct tls *clone_tls;
   struct tls *thread_tls;
   // check if tid has a dictionary entry
+  printf("clone key: %d\nthread key: %d\n", clone_key, thread_key);
   if (clone_key == -1){
     printf("No TLS Entry for Specified Thread\n");
     return -1;
@@ -355,22 +356,22 @@ int tls_clone (pthread_t tid){
     printf("Existing Entry for Running Thread!\n");
     return -1;
   }
-  else {
-    thread_key = find_free_tls();
-    thread_tls = thread_dict[search_tid(thread_key)].tls;
-    clone_tls = thread_dict[search_tid(clone_key)].tls;
-  }
-
-  printf("setting up thread_tls\n");
+  
+  thread_key = find_free_tls();
+  clone_tls = thread_dict[clone_key].tls;
+  //printf("clone tls from dict: %lx\n", (unsigned long int)thread_dict[clone_key].tls);
+  //printf("clone tls: %lx\n", (unsigned long int)clone_tls);
   thread_tls = malloc(sizeof(struct tls));
   thread_dict[thread_key].tls = thread_tls;
   thread_dict[thread_key].tid = pthread_self();
+
   
-  thread_tls->page_count = clone_tls->page_count;
+  thread_tls->page_count = 5;
   thread_tls->tid = pthread_self();
   thread_tls->size = clone_tls->size;
   thread_tls->page_addr = NULL;
 
+  printf("copying pages\n");
   if(clone_tls->page_count > 0){
     thread_tls->page_addr = malloc(clone_tls->page_count * sizeof(struct page)); 
     for (int i = 0; i < clone_tls->page_count; i++){

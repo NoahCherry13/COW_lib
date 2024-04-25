@@ -336,3 +336,22 @@ int tls_write(unsigned int offset, unsigned int length, const char *buffer)
   }
   return 0;
 }
+
+int tls_clone (pthread_t tid){
+
+  int clone_key = search_tid(tid);
+  int thread_key = search_tid(pthread_self());
+  
+  // check if tid has a dictionary entry
+  if (clone_key == -1){
+    printf("No TLS Entry for Specified Thread\n");
+    return -1;
+  }
+
+  // check if current thread has a dictionary entry
+  if (thread_key != -1){
+    printf("Existing Entry for Running Thread!\n");
+    return -1;
+  }
+  return 0;
+}

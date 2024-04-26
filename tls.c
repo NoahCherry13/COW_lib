@@ -64,21 +64,27 @@ unsigned int byte_to_page(int bytes){
   return pages;
 }
 
-void tls_fault(int sig, siginfo_t *si, void *context){
+int check_tls_fault(unsigned long fault_address){
   
-  unsigned long p_fault = ((unsigned long) si->si_addr) & ~(ps-1); 
-  //struct page *page_ind;
   struct tls *tls_ptr;
 
   for (int i = 0; i < MAX_THREADS; i++){
     if (thread_dict[i].tid != (pthread_t) -1){
       tls_ptr = thread_dict[i].tls;
       for (int j = 0; j < tls_ptr->page_count; j++){
-	if ((unsigned long)tls_ptr->page_addr[j]->page_head == p_fault){
-	  pthread_exit(NULL);
+	if ((unsigned long)tls_ptr->page_addr[j]->page_head == fault_address){
+	  return 1;
 	}
       }
     }
+  }
+  return 0;
+}
+
+void handle_fault(int sig, siginfo_t *si, void *context){
+  unsigned long p_fault = ((unsigned long) si->si_addr) & ~(ps-1);
+  if(check_tls_fault(p_fault)){
+    pthread_exit(NULL);
   }
   signal(SIGSEGV, SIG_DFL);
   signal(SIGBUS, SIG_DFL);
@@ -92,7 +98,7 @@ void tls_init(){
   struct sigaction handler;
   sigemptyset(&handler.sa_mask);
   handler.sa_flags = SA_SIGINFO;
-  handler.sa_sigaction = tls_fault;
+  handler.sa_sigaction = handle_fault;
   sigaction(SIGSEGV, &handler, NULL);
   sigaction(SIGBUS, &handler, NULL);
 

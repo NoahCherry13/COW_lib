@@ -72,7 +72,7 @@ int check_tls_fault(unsigned long fault_address){
     if (thread_dict[i].tid != (pthread_t) -1){
       tls_ptr = thread_dict[i].tls;
       for (int j = 0; j < tls_ptr->page_count; j++){
-	if ((unsigned long)tls_ptr->page_addr[j]->page_head == fault_address){
+	if (tls_ptr->page_addr[j]->page_head == (void *)fault_address){
 	  return 1;
 	}
       }
@@ -82,7 +82,7 @@ int check_tls_fault(unsigned long fault_address){
 }
 
 void handle_fault(int sig, siginfo_t *si, void *context){
-  unsigned long p_fault = ((unsigned long) si->si_addr) & ~(ps-1);
+  unsigned long p_fault = ((unsigned long int) si->si_addr) & ~(ps-1);
   if(check_tls_fault(p_fault)){
     pthread_exit(NULL);
   }

@@ -63,7 +63,7 @@ unsigned int byte_to_page(int bytes){
   unsigned int pages = (bytes + ps/2)/ps;
   return pages;
 }
-
+/*
 int check_tls_fault(unsigned long fault_address){
   
   struct tls *tls_ptr;
@@ -89,6 +89,30 @@ void handle_fault(int sig, siginfo_t *si, void *context){
   signal(SIGSEGV, SIG_DFL);
   signal(SIGBUS, SIG_DFL);
   raise(sig);
+}
+*/
+
+void handle_fault(int sig, siginfo_t *si, void *context)
+{
+  unsigned long int p_fault = ((unsigned long int)si->si_addr) & ~(ps-1);
+  int is_fault = 0;
+
+  for (int i = 0; i < MAX_THREADS; i++){
+    if (thread_dict[i].tls->page_addr == (void *)p_fault) {
+      is_fault = 0;
+      break;
+    }
+  }
+
+  if (is_fault){
+    pthread_exit(NULL);
+  }
+  else {
+    signal(SIGSEGV, SIG_DFL);
+    signal(SIGBUS, SIG_DFL);
+    raise(sig);
+  }
+    
 }
 
 void tls_init(){
